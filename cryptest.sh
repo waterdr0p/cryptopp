@@ -48,8 +48,6 @@ if [ ! -z "CXXFLAGS" ]; then
 	done
 fi
 
-echo "Retained user CXXFLAGS: ${RETAINED_CXXFLAGS[@]}"
-
 # Avoid CRYPTOPP_DATA_DIR in this shell
 unset CRYPTOPP_DATA_DIR
 
@@ -1676,7 +1674,7 @@ fi
 
 ############################################
 # Modern compiler and old hardware, like PII, PIII or Core2
-if [ "$IS_X86" -ne "0" ] || [ "$IS_X64" -ne "0" ]; then
+if [ "$HAVE_X86_AES" -ne "0" ] || [ "$HAVE_X86_RDRAND" -ne "0" ] || [ "$HAVE_X86_RDSEED" -ne "0" ]; then
 
 	echo
 	echo "************************************" | tee -a "$TEST_RESULTS"
@@ -1694,7 +1692,7 @@ if [ "$IS_X86" -ne "0" ] || [ "$IS_X64" -ne "0" ]; then
 		OPTS+=("-mrdseed")
 	fi
 
-	export CXXFLAGS="-DNDEBUG -g2 -O2 -march=native ${OPTS[@]} ${RETAINED_CXXFLAGS[@]}"
+	export CXXFLAGS="-DNDEBUG -g2 -O2 ${OPTS[@]} ${RETAINED_CXXFLAGS[@]}"
 	"$MAKE" "${MAKEARGS[@]}" static cryptest.exe 2>&1 | tee -a "$TEST_RESULTS"
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
 		echo "ERROR: failed to make cryptest.exe" | tee -a "$TEST_RESULTS"

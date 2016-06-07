@@ -24,7 +24,8 @@ touch "$WARN_RESULTS"
 
 # Respect user's preferred flags, but filter the stuff we expliclty test
 FILTERED_CXXFLAGS=("-DDEBUG" "-DNDEBUG" "-g" "-g0" "-g1" "-g2" "-g3" "-O0" "-O1" "-O2" "-O3" "-Os" "-Og" "-std=c++03" "-std=c++11" "-std=c++14"
-                   "-DCRYPTOPP_DISABLE_ASM" "-fsanitize=address" "-fsanitize=undefined" "-march=armv8-a+crypto" "-march=armv8-a+crc"
+                   "-DCRYPTOPP_DISABLE_ASM" "-fsanitize=address" "-fsanitize=undefined"
+                   "-march=armv7-a" "-mfpu=neon" "-march=armv8-a+crypto" "-march=armv8-a+crc"
                    "-DDCRYPTOPP_NO_BACKWARDS_COMPATIBILITY_562" "-DDCRYPTOPP_NO_UNALIGNED_DATA_ACCESS")
 # Additional CXXFLAGS we did not filter
 RETAINED_CXXFLAGS=("")
@@ -91,8 +92,11 @@ else
 	MAKE=make
 fi
 
-if [ -z "$TMP" ]; then
+if [ -z "$TMP" ] && [ -d "/tmp" ]; then
 	TMP=/tmp
+elif [ -z "$TMP" ]; then
+	echo "Failed to locate TMP directory for writing test program."
+	[ "$0" = "$BASH_SOURCE" ] && exit 1 || return 1
 fi
 
 $CXX -x c++ -DCRYPTOPP_ADHOC_MAIN -Wno-deprecated-declarations adhoc.cpp.proto -o $TMP/adhoc.exe > /dev/null 2>&1
@@ -166,17 +170,36 @@ if [ "$IS_X64" -ne "0" ]; then
 	fi
 fi
 
-# Set to 0 if you don't have ARMv8
+HAVE_ARMV7A=0
+if [ "$IS_ARM32" -ne "0" ] || [ "$IS_ARM64" -ne "0" ]; then
+	# This may lead to Aarch32 execution environment on Aarch64. We want to test it - no surprises.
+	$CXX -x c++ -DCRYPTOPP_ADHOC_MAIN -march=armv7-a -mfpu=neon adhoc.cpp.proto -o $TMP/adhoc.exe > /dev/null 2>&1
+	if [ "$?" -eq "0" ]; then
+		$TMP/adhoc.exe
+		if [ "$?" -eq "0" ]; then
+			HAVE_ARMV7A=1
+		fi
+	fi
+fi
+
 HAVE_ARM_CRC=0
 HAVE_ARM_CRYPTO=0
 if [ "$IS_ARM32" -ne "0" ] || [ "$IS_ARM64" -ne "0" ]; then
+	# This leads to an unexpected config on 32-bit ARM. It compiles a 32-bit executable with CRC instructions.
 	$CXX -x c++ -DCRYPTOPP_ADHOC_MAIN -march=armv8-a+crc adhoc.cpp.proto -o $TMP/adhoc.exe > /dev/null 2>&1
 	if [ "$?" -eq "0" ]; then
-		HAVE_ARM_CRC=1
+		$TMP/adhoc.exe
+		if [ "$?" -eq "0" ]; then
+			HAVE_ARM_CRC=1
+		fi
 	fi
+	# This provides and expected config on 32-bit ARM. It fails to create a 32-bit executable.
 	$CXX -x c++ -DCRYPTOPP_ADHOC_MAIN -march=armv8-a+crypto adhoc.cpp.proto -o $TMP/adhoc.exe > /dev/null 2>&1
 	if [ "$?" -eq "0" ]; then
-		HAVE_ARM_CRYPTO=1
+		$TMP/adhoc.exe
+		if [ "$?" -eq "0" ]; then
+			HAVE_ARM_CRYPTO=1
+		fi
 	fi
 fi
 
@@ -203,21 +226,6 @@ HAVE_VALGRIND=$(which valgrind 2>&1 | grep -v "no valgrind" | grep -i -c valgrin
 
 # Echo back to ensure something is not missed.
 echo | tee -a "$TEST_RESULTS"
-echo "HAVE_CXX03: $HAVE_CXX03" | tee -a "$TEST_RESULTS"
-echo "HAVE_CXX11: $HAVE_CXX11" | tee -a "$TEST_RESULTS"
-echo "HAVE_CXX14: $HAVE_CXX14" | tee -a "$TEST_RESULTS"
-echo "HAVE_ASAN: $HAVE_ASAN" | tee -a "$TEST_RESULTS"
-echo "HAVE_UBSAN: $HAVE_UBSAN" | tee -a "$TEST_RESULTS"
-
-if [ "$HAVE_VALGRIND" -ne "0" ]; then
-	echo "HAVE_VALGRIND: $HAVE_VALGRIND" | tee -a "$TEST_RESULTS"
-fi
-if [ "$HAVE_INTEL_MULTIARCH" -ne "0" ]; then
-	echo "HAVE_INTEL_MULTIARCH: $HAVE_INTEL_MULTIARCH" | tee -a "$TEST_RESULTS"
-fi
-if [ "$HAVE_PPC_MULTIARCH" -ne "0" ]; then
-	echo "HAVE_PPC_MULTIARCH: $HAVE_PPC_MULTIARCH" | tee -a "$TEST_RESULTS"
-fi
 if [ "$IS_DARWIN" -ne "0" ]; then
 	echo "IS_DARWIN: $IS_DARWIN" | tee -a "$TEST_RESULTS"
 	unset MallocScribble MallocPreScribble MallocGuardEdges
@@ -240,6 +248,32 @@ if [ "$IS_X64" -ne "0" ]; then
 	echo "IS_X64: $IS_X64" | tee -a "$TEST_RESULTS"
 elif [ "$IS_X86" -ne "0" ]; then
 	echo "IS_X86: $IS_X86" | tee -a "$TEST_RESULTS"
+fi
+
+echo | tee -a "$TEST_RESULTS"
+echo "HAVE_CXX03: $HAVE_CXX03" | tee -a "$TEST_RESULTS"
+echo "HAVE_CXX11: $HAVE_CXX11" | tee -a "$TEST_RESULTS"
+echo "HAVE_CXX14: $HAVE_CXX14" | tee -a "$TEST_RESULTS"
+echo "HAVE_ASAN: $HAVE_ASAN" | tee -a "$TEST_RESULTS"
+echo "HAVE_UBSAN: $HAVE_UBSAN" | tee -a "$TEST_RESULTS"
+
+if [ "$HAVE_VALGRIND" -ne "0" ]; then
+	echo "HAVE_VALGRIND: $HAVE_VALGRIND" | tee -a "$TEST_RESULTS"
+fi
+if [ "$HAVE_INTEL_MULTIARCH" -ne "0" ]; then
+	echo "HAVE_INTEL_MULTIARCH: $HAVE_INTEL_MULTIARCH" | tee -a "$TEST_RESULTS"
+fi
+if [ "$HAVE_PPC_MULTIARCH" -ne "0" ]; then
+	echo "HAVE_PPC_MULTIARCH: $HAVE_PPC_MULTIARCH" | tee -a "$TEST_RESULTS"
+fi
+if [ "$HAVE_ARMV7A" -ne "0" ]; then
+	echo "HAVE_ARMV7A: $HAVE_ARMV7A" | tee -a "$TEST_RESULTS"
+fi
+if [ "$HAVE_ARM_CRYPTO" -ne "0" ]; then
+	echo "HAVE_ARM_CRYPTO: $HAVE_ARM_CRYPTO" | tee -a "$TEST_RESULTS"
+fi
+if [ "$HAVE_ARM_CRC" -ne "0" ]; then
+	echo "HAVE_ARM_CRC: $HAVE_ARM_CRC" | tee -a "$TEST_RESULTS"
 fi
 
 ############################################
@@ -1694,6 +1728,35 @@ if [ "$HAVE_X86_AES" -ne "0" ] || [ "$HAVE_X86_RDRAND" -ne "0" ] || [ "$HAVE_X86
 
 	export CXXFLAGS="-DNDEBUG -g2 -O2 ${OPTS[@]} ${RETAINED_CXXFLAGS[@]}"
 	"$MAKE" "${MAKEARGS[@]}" static cryptest.exe 2>&1 | tee -a "$TEST_RESULTS"
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+		echo "ERROR: failed to make cryptest.exe" | tee -a "$TEST_RESULTS"
+	else
+		./cryptest.exe v 2>&1 | tee -a "$TEST_RESULTS"
+		if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+			echo "ERROR: failed to execute validation suite" | tee -a "$TEST_RESULTS"
+		fi
+		./cryptest.exe tv all 2>&1 | tee -a "$TEST_RESULTS"
+		if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+			echo "ERROR: failed to execute test vectors" | tee -a "$TEST_RESULTS"
+		fi
+	fi
+fi
+
+############################################
+# ARMv7a and NEON
+if [ "$HAVE_ARMV7A" -ne "0" ]; then
+	echo
+	echo "************************************" | tee -a "$TEST_RESULTS"
+	echo "Testing: ARMv7a and NEON" | tee -a "$TEST_RESULTS"
+	echo
+
+	unset CXXFLAGS
+	"$MAKE" clean > /dev/null 2>&1
+	rm -f adhoc.cpp > /dev/null 2>&1
+
+	export CXXFLAGS="-DNDEBUG -g2 -O2 -march=armv7-a -mfpu=neon ${RETAINED_CXXFLAGS[@]}"
+	"$MAKE" "${MAKEARGS[@]}" static cryptest.exe 2>&1 | tee -a "$TEST_RESULTS"
+
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
 		echo "ERROR: failed to make cryptest.exe" | tee -a "$TEST_RESULTS"
 	else

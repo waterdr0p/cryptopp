@@ -1224,8 +1224,8 @@ public:
 	virtual unsigned int BlockSize() const =0;
 	virtual unsigned int KeyLength() const =0;
 
-	virtual apbt NewEncryption(const byte *key) const =0;
-	virtual apbt NewDecryption(const byte *key) const =0;
+	virtual apbt NewEncryption(const byte *keyStr) const =0;
+	virtual apbt NewDecryption(const byte *keyStr) const =0;
 };
 
 template <class E, class D> class FixedRoundsCipherFactory : public CipherFactory
@@ -1235,10 +1235,10 @@ public:
 	unsigned int BlockSize() const {return E::BLOCKSIZE;}
 	unsigned int KeyLength() const {return m_keylen;}
 
-	apbt NewEncryption(const byte *key) const
-		{return apbt(new E(key, m_keylen));}
-	apbt NewDecryption(const byte *key) const
-		{return apbt(new D(key, m_keylen));}
+	apbt NewEncryption(const byte *keyStr) const
+		{return apbt(new E(keyStr, m_keylen));}
+	apbt NewDecryption(const byte *keyStr) const
+		{return apbt(new D(keyStr, m_keylen));}
 
 	unsigned int m_keylen;
 };
@@ -1251,10 +1251,10 @@ public:
 	unsigned int BlockSize() const {return E::BLOCKSIZE;}
 	unsigned int KeyLength() const {return m_keylen;}
 
-	apbt NewEncryption(const byte *key) const
-		{return apbt(new E(key, m_keylen, m_rounds));}
-	apbt NewDecryption(const byte *key) const
-		{return apbt(new D(key, m_keylen, m_rounds));}
+	apbt NewEncryption(const byte *keyStr) const
+		{return apbt(new E(keyStr, m_keylen, m_rounds));}
+	apbt NewDecryption(const byte *keyStr) const
+		{return apbt(new D(keyStr, m_keylen, m_rounds));}
 
 	unsigned int m_keylen, m_rounds;
 };
